@@ -12,7 +12,6 @@ const state = {
 const configForm = document.getElementById("config-form");
 const rootDirInput = document.getElementById("root-dir-input");
 const configStatus = document.getElementById("config-status");
-const rootDirDisplay = document.getElementById("root-dir-display");
 const openSettingsButton = document.getElementById("open-settings-button");
 const closeSettingsButton = document.getElementById("close-settings-button");
 const settingsModal = document.getElementById("settings-modal");
@@ -22,7 +21,6 @@ const treeRoot = document.getElementById("tree-root");
 const playAllButton = document.getElementById("play-all-button");
 const audioPlayer = document.getElementById("audio-player");
 const videoPlayer = document.getElementById("video-player");
-const idlePoster = document.getElementById("idle-poster");
 const nowTitle = document.getElementById("now-title");
 const nowMeta = document.getElementById("now-meta");
 const playToggleButton = document.getElementById("play-toggle-button");
@@ -63,7 +61,6 @@ function showIdlePlayer() {
   videoPlayer.hidden = true;
   audioPlayer.removeAttribute("src");
   videoPlayer.removeAttribute("src");
-  idlePoster.hidden = false;
 }
 
 function syncPlayToggleLabel() {
@@ -77,7 +74,6 @@ function syncPlayToggleLabel() {
 
 function renderConfig() {
   rootDirInput.value = state.rootDir;
-  rootDirDisplay.textContent = state.rootDir ? `扫描路径 ${state.rootDir}` : "尚未设置根目录";
 }
 
 function renderTree() {
@@ -205,7 +201,6 @@ function playCurrentIndex(index, autoplay = true) {
     videoPlayer.removeAttribute("src");
     audioPlayer.src = item.url;
     audioPlayer.hidden = false;
-    idlePoster.hidden = true;
     audioPlayer.load();
     if (autoplay) {
       void audioPlayer.play().catch(() => {});
@@ -216,7 +211,6 @@ function playCurrentIndex(index, autoplay = true) {
     audioPlayer.removeAttribute("src");
     videoPlayer.src = item.url;
     videoPlayer.hidden = false;
-    idlePoster.hidden = true;
     videoPlayer.load();
     if (autoplay) {
       void videoPlayer.play().catch(() => {});

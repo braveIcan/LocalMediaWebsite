@@ -29,3 +29,12 @@ python3 app.py
 ```
 
 浏览器访问 `http://127.0.0.1:8876`。
+
+![](assets/overview.png)
+
+## todos
+
+Features to add:
+- [ ] global search (maybe using `find`)
+
+
