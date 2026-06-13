@@ -33,6 +33,8 @@ MEDIA_EXTENSIONS = {
     ".m4v": "video",
 }
 
+CHUNK_SIZE = 64 * 1024
+
 
 @dataclass
 class MediaItem:
@@ -201,6 +203,38 @@ def resolve_media_path(raw_rel_path: str) -> Path:
     return requested
 
 
+def parse_range_header(range_header: str | None, file_size: int) -> tuple[int, int] | None:
+    if not range_header:
+        return None
+
+    unit, _, raw_range = range_header.partition("=")
+    if unit.strip().lower() != "bytes" or not raw_range.strip():
+        raise ValueError("invalid range unit")
+
+    if "," in raw_range:
+        raise ValueError("multiple ranges are not supported")
+
+    start_text, _, end_text = raw_range.strip().partition("-")
+    if not start_text and not end_text:
+        raise ValueError("empty range")
+
+    if start_text:
+        start = int(start_text)
+        end = int(end_text) if end_text else file_size - 1
+    else:
+        suffix_length = int(end_text)
+        if suffix_length <= 0:
+            raise ValueError("invalid suffix range")
+        start = max(file_size - suffix_length, 0)
+        end = file_size - 1
+
+    if start < 0 or end < start or start >= file_size:
+        raise ValueError("range out of bounds")
+
+    end = min(end, file_size - 1)
+    return start, end
+
+
 class MediaWebsiteHandler(BaseHTTPRequestHandler):
     server_version = "MediaWebsite/1.0"
 
@@ -279,12 +313,47 @@ class MediaWebsiteHandler(BaseHTTPRequestHandler):
         if not path.is_file():
             self.send_error(HTTPStatus.NOT_FOUND, "Not Found")
             return
-        data = path.read_bytes()
-        self.send_response(HTTPStatus.OK)
+        file_size = path.stat().st_size
+
+        try:
+            byte_range = parse_range_header(self.headers.get("Range"), file_size)
+        except ValueError:
+            self.send_response(HTTPStatus.REQUESTED_RANGE_NOT_SATISFIABLE)
+            self.send_header("Content-Range", f"bytes */{file_size}")
+            self.end_headers()
+            return
+
+        if byte_range is None:
+            start = 0
+            end = file_size - 1
+            status = HTTPStatus.OK
+        else:
+            start, end = byte_range
+            status = HTTPStatus.PARTIAL_CONTENT
+
+        content_length = end - start + 1
+        self.send_response(status)
         self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Accept-Ranges", "bytes")
+        self.send_header("Content-Length", str(content_length))
+        if status == HTTPStatus.PARTIAL_CONTENT:
+            self.send_header("Content-Range", f"bytes {start}-{end}/{file_size}")
         self.end_headers()
-        self.wfile.write(data)
+        self.stream_file(path, start, content_length)
+
+    def stream_file(self, path: Path, start: int, length: int) -> None:
+        remaining = length
+        try:
+            with path.open("rb") as file_obj:
+                file_obj.seek(start)
+                while remaining > 0:
+                    chunk = file_obj.read(min(CHUNK_SIZE, remaining))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    remaining -= len(chunk)
+        except BrokenPipeError:
+            return
 
     def send_json(self, payload: object, status: HTTPStatus = HTTPStatus.OK) -> None:
         data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -292,7 +361,10 @@ class MediaWebsiteHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.wfile.write(data)
+        except BrokenPipeError:
+            return
 
     def log_message(self, format: str, *args: object) -> None:
         return

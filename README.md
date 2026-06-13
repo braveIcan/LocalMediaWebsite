@@ -37,4 +37,5 @@ python3 app.py
 Features to add:
 - [ ] global search (maybe using `find`)
 
+- [x] Audio streaming optimization (Supported `Range` requests & `Content-Range` headers for smooth scrubbing/seeking)
 
