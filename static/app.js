@@ -6,7 +6,7 @@ const state = {
   playlist: [],
   playlistTitle: "当前播放列表",
   currentIndex: -1,
-  mode: "sequence",
+  mode: "single",
 };
 
 const configForm = document.getElementById("config-form");
@@ -100,6 +100,7 @@ function renderTree() {
       block.classList.toggle("is-open");
     });
     playButton.addEventListener("click", () => {
+      setMode("sequence");
       activatePlaylist(category.items, `${category.name} 播放列表`, 0, true);
     });
 
@@ -110,6 +111,7 @@ function renderTree() {
       fileNode.querySelector(".file-name").textContent = item.title;
       button.addEventListener("click", () => {
         const startIndex = category.items.findIndex((current) => current.id === item.id);
+        setMode("single");
         activatePlaylist(category.items, `${category.name} 播放列表`, startIndex, true);
       });
       filesContainer.append(fileNode);
@@ -226,6 +228,9 @@ function nextIndex() {
   if (state.playlist.length === 0) {
     return -1;
   }
+  if (state.mode === "single") {
+    return -1;
+  }
   if (state.mode === "shuffle") {
     if (state.playlist.length === 1) {
       return 0;
@@ -248,6 +253,9 @@ function nextIndex() {
 function previousIndex() {
   if (state.playlist.length === 0) {
     return -1;
+  }
+  if (state.mode === "single") {
+    return state.currentIndex < 0 ? 0 : state.currentIndex;
   }
   if (state.mode === "shuffle") {
     return Math.floor(Math.random() * state.playlist.length);
@@ -362,12 +370,12 @@ modeButtons.forEach((button) => {
 
 async function initialize() {
   showIdlePlayer();
-  setMode("sequence");
+  setMode("single");
   await fetchLibrary();
   setStatus("Ready");
 }
 
 initialize().catch((error) => {
   setStatus("Failed", "error");
-  rootDirDisplay.textContent = error.message || "初始化失败";
+  window.alert(error.message || "初始化失败");
 });
