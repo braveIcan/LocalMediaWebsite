@@ -1,12 +1,15 @@
 const state = {
   configured: false,
-  rootDir: "",
+  rootDirs: [],
   categories: [],
   allItems: [],
   playlist: [],
   playlistTitle: "当前播放列表",
   currentIndex: -1,
   mode: "single",
+  sleepTimerId: null,
+  sleepDeadline: null,
+  sleepStopAfterTrack: false,
 };
 
 const configForm = document.getElementById("config-form");
@@ -16,6 +19,16 @@ const openSettingsButton = document.getElementById("open-settings-button");
 const closeSettingsButton = document.getElementById("close-settings-button");
 const settingsModal = document.getElementById("settings-modal");
 const settingsBackdrop = document.getElementById("settings-backdrop");
+const sleepModal = document.getElementById("sleep-modal");
+const sleepBackdrop = document.getElementById("sleep-backdrop");
+const sleepForm = document.getElementById("sleep-form");
+const sleepDurationInput = document.getElementById("sleep-duration-input");
+const sleepStatus = document.getElementById("sleep-status");
+const sleepTimerButton = document.getElementById("sleep-timer-button");
+const closeSleepButton = document.getElementById("close-sleep-button");
+const cancelSleepButton = document.getElementById("cancel-sleep-button");
+const scanPathEmpty = document.getElementById("scan-path-empty");
+const scanPathList = document.getElementById("scan-path-list");
 const treeEmpty = document.getElementById("tree-empty");
 const treeRoot = document.getElementById("tree-root");
 const playAllButton = document.getElementById("play-all-button");
@@ -34,6 +47,7 @@ const categoryTemplate = document.getElementById("category-template");
 const fileTemplate = document.getElementById("file-template");
 const playlistItemTemplate = document.getElementById("playlist-item-template");
 const modeButtons = Array.from(document.querySelectorAll("[data-mode]"));
+const sleepModeInputs = Array.from(document.querySelectorAll("[name=\"sleep-stop-mode\"]"));
 
 function setStatus(text, mode = "idle") {
   configStatus.textContent = text;
@@ -72,8 +86,103 @@ function syncPlayToggleLabel() {
   }
 }
 
+function stopPlayback() {
+  const player = activePlayer();
+  if (player) {
+    player.pause();
+  }
+  syncPlayToggleLabel();
+}
+
+function renderSleepTimer() {
+  const timerActive = state.sleepTimerId !== null || state.sleepStopAfterTrack;
+  sleepTimerButton.classList.toggle("is-active", timerActive);
+  cancelSleepButton.hidden = !timerActive;
+
+  if (state.sleepStopAfterTrack) {
+    sleepStatus.textContent = "计时已结束，将在当前曲目播放完毕后停止。";
+    sleepTimerButton.title = "将在当前曲目结束后停止";
+    return;
+  }
+
+  if (state.sleepDeadline !== null) {
+    const minutes = Math.max(1, Math.ceil((state.sleepDeadline - Date.now()) / 60000));
+    sleepStatus.textContent = `已设置约 ${minutes} 分钟后停止播放。`;
+    sleepTimerButton.title = "已设置定时停止";
+    return;
+  }
+
+  sleepStatus.textContent = "未设置定时停止。";
+  sleepTimerButton.title = "设置定时停止";
+}
+
+function clearSleepTimer() {
+  if (state.sleepTimerId !== null) {
+    window.clearTimeout(state.sleepTimerId);
+  }
+  state.sleepTimerId = null;
+  state.sleepDeadline = null;
+  state.sleepStopAfterTrack = false;
+  renderSleepTimer();
+}
+
+function completeSleepTimer(stopMode) {
+  state.sleepTimerId = null;
+  state.sleepDeadline = null;
+
+  if (stopMode === "after-track" && activePlayer()) {
+    state.sleepStopAfterTrack = true;
+  } else {
+    state.sleepStopAfterTrack = false;
+    stopPlayback();
+  }
+  renderSleepTimer();
+}
+
+function scheduleSleepTimer(minutes, stopMode) {
+  clearSleepTimer();
+  state.sleepDeadline = Date.now() + minutes * 60 * 1000;
+  state.sleepTimerId = window.setTimeout(() => {
+    completeSleepTimer(stopMode);
+  }, minutes * 60 * 1000);
+  renderSleepTimer();
+}
+
 function renderConfig() {
-  rootDirInput.value = state.rootDir;
+  rootDirInput.value = "";
+  scanPathList.innerHTML = "";
+
+  if (state.rootDirs.length === 0) {
+    scanPathEmpty.hidden = false;
+    scanPathList.hidden = true;
+    return;
+  }
+
+  scanPathEmpty.hidden = true;
+  scanPathList.hidden = false;
+  const fragment = document.createDocumentFragment();
+  state.rootDirs.forEach((rootDir) => {
+    const item = document.createElement("div");
+    item.className = "scan-path-item";
+
+    const path = document.createElement("span");
+    path.className = "scan-path-name";
+    path.textContent = rootDir;
+
+    const removeButton = document.createElement("button");
+    removeButton.className = "scan-path-remove";
+    removeButton.type = "button";
+    removeButton.textContent = "−";
+    removeButton.setAttribute("aria-label", `移除扫描路径 ${rootDir}`);
+    removeButton.title = "移除扫描路径";
+    removeButton.addEventListener("click", () => {
+      void saveRootDirs(state.rootDirs.filter((path) => path !== rootDir));
+    });
+
+    item.append(path, removeButton);
+    fragment.append(item);
+  });
+  scanPathList.append(fragment);
 }
 
 function renderTree() {
@@ -306,11 +415,36 @@ async function fetchLibrary() {
   const response = await fetch("/api/library");
   const data = await response.json();
   state.configured = Boolean(data.configured);
-  state.rootDir = data.root_dir || "";
+  state.rootDirs = data.root_dirs || [];
   state.categories = data.categories || [];
   state.allItems = data.all_items || [];
   renderConfig();
   renderTree();
+}
+
+async function saveRootDirs(rootDirs) {
+  setStatus("Scanning", "busy");
+
+  try {
+    const response = await fetch("/api/config", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ root_dirs: rootDirs }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error || "更新扫描路径失败");
+    }
+    setStatus("Scanned");
+    await fetchLibrary();
+    activatePlaylist([], "当前播放列表");
+    closeSettings();
+  } catch (error) {
+    setStatus("Failed", "error");
+    window.alert(error.message || "更新扫描路径失败");
+  }
 }
 
 function openSettings() {
@@ -321,30 +455,22 @@ function closeSettings() {
   settingsModal.hidden = true;
 }
 
+function openSleepTimer() {
+  renderSleepTimer();
+  sleepModal.hidden = false;
+}
+
+function closeSleepTimer() {
+  sleepModal.hidden = true;
+}
+
 configForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  setStatus("Scanning", "busy");
-
-  try {
-    const response = await fetch("/api/config", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ root_dir: rootDirInput.value.trim() }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(data.error || "设置根目录失败");
-    }
-    setStatus("Scanned");
-    await fetchLibrary();
-    activatePlaylist([], "当前播放列表");
-    closeSettings();
-  } catch (error) {
-    setStatus("Failed", "error");
-    window.alert(error.message || "设置根目录失败");
+  const newRootDir = rootDirInput.value.trim();
+  if (!newRootDir) {
+    return;
   }
+  await saveRootDirs([...state.rootDirs, newRootDir]);
 });
 
 playAllButton.addEventListener("click", () => {
@@ -354,6 +480,22 @@ playAllButton.addEventListener("click", () => {
 openSettingsButton.addEventListener("click", openSettings);
 closeSettingsButton.addEventListener("click", closeSettings);
 settingsBackdrop.addEventListener("click", closeSettings);
+sleepTimerButton.addEventListener("click", openSleepTimer);
+closeSleepButton.addEventListener("click", closeSleepTimer);
+sleepBackdrop.addEventListener("click", closeSleepTimer);
+cancelSleepButton.addEventListener("click", clearSleepTimer);
+
+sleepForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const minutes = Number(sleepDurationInput.value);
+  const stopMode = sleepModeInputs.find((input) => input.checked)?.value;
+  if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440 || !stopMode) {
+    window.alert("请输入 1 到 1440 之间的分钟数。");
+    return;
+  }
+  scheduleSleepTimer(minutes, stopMode);
+  closeSleepTimer();
+});
 
 playToggleButton.addEventListener("click", () => {
   const player = activePlayer();
@@ -394,6 +536,10 @@ modeButtons.forEach((button) => {
   player.addEventListener("play", syncPlayToggleLabel);
   player.addEventListener("pause", syncPlayToggleLabel);
   player.addEventListener("ended", () => {
+    if (state.sleepStopAfterTrack) {
+      clearSleepTimer();
+      return;
+    }
     const index = nextIndex();
     if (index >= 0) {
       playCurrentIndex(index, true);
@@ -404,6 +550,7 @@ modeButtons.forEach((button) => {
 async function initialize() {
   showIdlePlayer();
   setMode("single");
+  renderSleepTimer();
   await fetchLibrary();
   setStatus("Ready");
 }

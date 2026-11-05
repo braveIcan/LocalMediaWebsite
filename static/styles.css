@@ -133,15 +133,19 @@ input {
 }
 
 .config-form button,
+.sleep-form button,
 .ghost-button,
 .control-button,
 .mode-chip,
 .settings-button,
-.secondary-button {
+.secondary-button,
+.scan-path-remove,
+.sleep-timer-button {
   cursor: pointer;
 }
 
-.config-form button,
+.config-form button[type="submit"],
+.sleep-form button[type="submit"],
 .control-button.primary,
 .settings-button {
   border: 0;
@@ -163,6 +167,66 @@ input {
   width: 100%;
   margin-top: auto;
   flex-shrink: 0;
+}
+
+.scan-paths {
+  min-height: 0;
+  min-width: 0;
+}
+
+.scan-path-list {
+  display: grid;
+  max-height: 160px;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.scan-path-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 32px;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.scan-path-item:first-child {
+  border-top: 1px solid var(--line);
+}
+
+.scan-path-name,
+.scan-path-empty {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.scan-path-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-path-remove {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  justify-self: end;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.2rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.scan-path-remove:hover {
+  color: var(--text);
 }
 
 .tree-root {
@@ -338,10 +402,16 @@ input {
 }
 
 .hero-actions,
-.mode-group {
+.mode-group,
+.player-tools {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+}
+
+.player-tools {
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .control-button {
@@ -352,6 +422,35 @@ input {
   background: var(--brand-soft);
   color: var(--brand-deep);
   border-color: rgba(211, 58, 49, 0.14);
+}
+
+.sleep-timer-button {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border: 1px solid rgba(24, 31, 56, 0.1);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--muted);
+}
+
+.sleep-timer-button svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.sleep-timer-button.is-active {
+  border-color: rgba(211, 58, 49, 0.2);
+  background: var(--brand-soft);
+  color: var(--brand-deep);
 }
 
 .player-surface {
@@ -440,17 +539,21 @@ input {
   gap: 14px;
 }
 
-.config-form label {
+.config-form label,
+.sleep-form > label {
   display: grid;
   gap: 8px;
 }
 
-.config-form span {
+.config-form span,
+.sleep-form > label > span,
+.sleep-options legend {
   font-weight: 700;
   font-size: 0.92rem;
 }
 
-.config-form input {
+.config-form input,
+.sleep-form input[type="number"] {
   width: 100%;
   padding: 14px 16px;
   border: 1px solid rgba(24, 31, 56, 0.12);
@@ -459,9 +562,41 @@ input {
   background: #fff;
 }
 
-.config-form input:focus {
+.config-form input:focus,
+.sleep-form input[type="number"]:focus {
   border-color: rgba(211, 58, 49, 0.32);
   box-shadow: 0 0 0 4px rgba(211, 58, 49, 0.08);
+}
+
+.sleep-form {
+  display: grid;
+  gap: 16px;
+}
+
+.sleep-options {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.sleep-options legend {
+  margin-bottom: 10px;
+}
+
+.sleep-options label {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: var(--text);
+}
+
+.sleep-options input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--brand);
 }
 
 .path-hint {

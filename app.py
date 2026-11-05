@@ -56,22 +56,28 @@ class MediaItem:
         }
 
 
-def load_config() -> dict[str, str]:
+def load_config() -> dict[str, list[str]]:
     if not CONFIG_PATH.is_file():
-        return {"root_dir": DEFAULT_ROOT_DIR}
+        return {"root_dirs": [DEFAULT_ROOT_DIR]}
     try:
         data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
-        return {"root_dir": DEFAULT_ROOT_DIR}
+        return {"root_dirs": [DEFAULT_ROOT_DIR]}
+
+    root_dirs = data.get("root_dirs")
+    if isinstance(root_dirs, list):
+        return {"root_dirs": [path.strip() for path in root_dirs if isinstance(path, str) and path.strip()]}
+
+    # Retain the existing scan path when migrating the old single-path config.
     root_dir = data.get("root_dir", "")
-    if not isinstance(root_dir, str) or not root_dir.strip():
-        return {"root_dir": DEFAULT_ROOT_DIR}
-    return {"root_dir": root_dir}
+    if isinstance(root_dir, str) and root_dir.strip():
+        return {"root_dirs": [root_dir.strip()]}
+    return {"root_dirs": [DEFAULT_ROOT_DIR]}
 
 
-def save_config(root_dir: str) -> None:
+def save_config(root_dirs: list[str]) -> None:
     CONFIG_PATH.write_text(
-        json.dumps({"root_dir": root_dir}, ensure_ascii=False, indent=2),
+        json.dumps({"root_dirs": root_dirs}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
@@ -85,15 +91,30 @@ def normalize_root_dir(raw_path: str) -> Path:
     return candidate
 
 
-def resolve_root_dir() -> Path | None:
-    config = load_config()
-    root_dir = config.get("root_dir", "").strip()
-    if not root_dir:
-        return None
-    try:
-        return normalize_root_dir(root_dir)
-    except ValueError:
-        return None
+def normalize_root_dirs(raw_paths: object) -> list[Path]:
+    if not isinstance(raw_paths, list):
+        raise ValueError("扫描路径必须是数组")
+
+    resolved_paths: list[Path] = []
+    seen_paths: set[Path] = set()
+    for raw_path in raw_paths:
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            raise ValueError("扫描路径不能为空")
+        resolved = normalize_root_dir(raw_path.strip())
+        if resolved not in seen_paths:
+            resolved_paths.append(resolved)
+            seen_paths.add(resolved)
+    return resolved_paths
+
+
+def resolve_root_dirs() -> list[Path]:
+    resolved_paths: list[Path] = []
+    for raw_path in load_config()["root_dirs"]:
+        try:
+            resolved_paths.append(normalize_root_dir(raw_path))
+        except ValueError:
+            continue
+    return resolved_paths
 
 
 def classify_media(path: Path) -> str | None:
@@ -106,16 +127,17 @@ def classify_media(path: Path) -> str | None:
 def list_media_files(root_dir: Path) -> tuple[list[dict[str, object]], list[dict[str, str]]]:
     categories: list[dict[str, object]] = []
     all_items: list[MediaItem] = []
+    source_name = root_dir.name or str(root_dir)
 
     root_files = sorted(
         [entry for entry in safe_iterdir(root_dir) if entry.is_file()],
         key=lambda entry: entry.name.casefold(),
     )
-    root_category_items = build_category_items(root_dir, "Root", root_files)
+    root_category_items = build_category_items(root_dir, source_name, root_files)
     if root_category_items:
         categories.append(
             {
-                "name": "Root",
+                "name": source_name,
                 "path": ".",
                 "items": [item.to_dict() for item in root_category_items],
             }
@@ -131,12 +153,13 @@ def list_media_files(root_dir: Path) -> tuple[list[dict[str, object]], list[dict
             [entry for entry in safe_iterdir(child_dir) if entry.is_file()],
             key=lambda entry: entry.name.casefold(),
         )
-        items = build_category_items(root_dir, child_dir.name, child_files)
+        category_name = f"{source_name} / {child_dir.name}"
+        items = build_category_items(root_dir, category_name, child_files)
         if not items:
             continue
         categories.append(
             {
-                "name": child_dir.name,
+                "name": category_name,
                 "path": child_dir.name,
                 "items": [item.to_dict() for item in items],
             }
@@ -162,40 +185,38 @@ def build_category_items(root_dir: Path, category_name: str, files: list[Path]) 
         rel_path = file_path.relative_to(root_dir).as_posix()
         items.append(
             MediaItem(
-                id=rel_path,
+                id=f"{root_dir}:{rel_path}",
                 title=file_path.stem,
                 rel_path=rel_path,
                 category=category_name,
                 kind=kind,
-                url=f"/media?path={quote(rel_path)}",
+                url=f"/media?root={quote(str(root_dir), safe='')}&path={quote(rel_path)}",
             )
         )
     return items
 
 
 def build_library_payload() -> dict[str, object]:
-    root_dir = resolve_root_dir()
-    if root_dir is None:
-        return {
-            "root_dir": "",
-            "configured": False,
-            "categories": [],
-            "all_items": [],
-        }
-
-    categories, all_items = list_media_files(root_dir)
+    configured_root_dirs = load_config()["root_dirs"]
+    categories: list[dict[str, object]] = []
+    all_items: list[dict[str, str]] = []
+    for root_dir in resolve_root_dirs():
+        root_categories, root_items = list_media_files(root_dir)
+        categories.extend(root_categories)
+        all_items.extend(root_items)
     return {
-        "root_dir": str(root_dir),
-        "configured": True,
+        "root_dirs": configured_root_dirs,
+        "configured": bool(configured_root_dirs),
         "categories": categories,
         "all_items": all_items,
     }
 
 
-def resolve_media_path(raw_rel_path: str) -> Path:
-    root_dir = resolve_root_dir()
+def resolve_media_path(raw_root_dir: str, raw_rel_path: str) -> Path:
+    requested_root = Path(unquote(raw_root_dir)).expanduser().resolve()
+    root_dir = next((path for path in resolve_root_dirs() if path == requested_root), None)
     if root_dir is None:
-        raise FileNotFoundError("未配置根目录")
+        raise FileNotFoundError("扫描路径不存在")
     requested = (root_dir / unquote(raw_rel_path)).resolve()
     if requested != root_dir and root_dir not in requested.parents:
         raise PermissionError("禁止访问")
@@ -261,8 +282,9 @@ class MediaWebsiteHandler(BaseHTTPRequestHandler):
 
         if parsed.path == "/media":
             params = parse_qs(parsed.query)
+            root_dir = params.get("root", [""])[0]
             media_path = params.get("path", [""])[0]
-            self.serve_media(media_path)
+            self.serve_media(root_dir, media_path)
             return
 
         self.send_error(HTTPStatus.NOT_FOUND, "Not Found")
@@ -275,9 +297,8 @@ class MediaWebsiteHandler(BaseHTTPRequestHandler):
 
         try:
             payload = self.read_json_body()
-            raw_root = str(payload.get("root_dir", "")).strip()
-            resolved = normalize_root_dir(raw_root)
-            save_config(str(resolved))
+            resolved_roots = normalize_root_dirs(payload.get("root_dirs"))
+            save_config([str(path) for path in resolved_roots])
         except ValueError as error:
             self.send_json({"error": str(error)}, status=HTTPStatus.BAD_REQUEST)
             return
@@ -285,7 +306,7 @@ class MediaWebsiteHandler(BaseHTTPRequestHandler):
             self.send_json({"error": "请求体必须是合法 JSON"}, status=HTTPStatus.BAD_REQUEST)
             return
 
-        self.send_json({"ok": True, "root_dir": str(resolved)})
+        self.send_json({"ok": True, "root_dirs": [str(path) for path in resolved_roots]})
 
     def read_json_body(self) -> dict[str, object]:
         content_length = int(self.headers.get("Content-Length", "0"))
@@ -299,9 +320,9 @@ class MediaWebsiteHandler(BaseHTTPRequestHandler):
             return
         self.serve_file(target, mimetypes.guess_type(target.name)[0] or "application/octet-stream")
 
-    def serve_media(self, raw_rel_path: str) -> None:
+    def serve_media(self, raw_root_dir: str, raw_rel_path: str) -> None:
         try:
-            media_path = resolve_media_path(raw_rel_path)
+            media_path = resolve_media_path(raw_root_dir, raw_rel_path)
         except FileNotFoundError:
             self.send_error(HTTPStatus.NOT_FOUND, "Not Found")
             return

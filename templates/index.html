@@ -37,11 +37,20 @@
         <section class="player-card">
           <div class="section-head">
             <h2>播放器</h2>
-            <div class="mode-group">
-              <button data-mode="single" class="mode-chip is-active" type="button">单曲播放</button>
-              <button data-mode="sequence" class="mode-chip" type="button">顺序播放</button>
-              <button data-mode="shuffle" class="mode-chip" type="button">随机播放</button>
-              <button data-mode="repeat" class="mode-chip" type="button">循环播放</button>
+            <div class="player-tools">
+              <div class="mode-group">
+                <button data-mode="single" class="mode-chip is-active" type="button">单曲播放</button>
+                <button data-mode="sequence" class="mode-chip" type="button">顺序播放</button>
+                <button data-mode="shuffle" class="mode-chip" type="button">随机播放</button>
+                <button data-mode="repeat" class="mode-chip" type="button">循环播放</button>
+              </div>
+              <button id="sleep-timer-button" class="sleep-timer-button" type="button" aria-label="设置定时停止" title="设置定时停止">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 8v5l3 2" />
+                  <circle cx="12" cy="13" r="7" />
+                  <path d="M5 3 3 5m16-2 2 2M8 21l-1 2m9-2 1 2" />
+                </svg>
+              </button>
             </div>
           </div>
 
@@ -90,24 +99,60 @@
       <div id="settings-backdrop" class="settings-backdrop"></div>
       <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <div class="section-head">
-          <h2 id="settings-title">设置扫描路径</h2>
+          <h2 id="settings-title">添加扫描路径</h2>
           <span id="config-status" class="status-pill">Idle</span>
         </div>
         <form id="config-form" class="config-form">
           <label>
-            <span>Root Dir</span>
+            <span>扫描目录</span>
             <input
               id="root-dir-input"
-              name="root_dir"
+              name="scan_dir"
               type="text"
               placeholder="/Users/you/Music"
               required
             />
           </label>
           <p class="path-hint">默认读取 `~/Music`。扫描时会跳过没有权限的目录。</p>
+          <section class="scan-paths">
+            <div id="scan-path-empty" class="scan-path-empty">尚未添加扫描路径。</div>
+            <div id="scan-path-list" class="scan-path-list" hidden></div>
+          </section>
           <div class="settings-actions">
             <button id="close-settings-button" class="secondary-button" type="button">关闭</button>
-            <button type="submit">保存并扫描</button>
+            <button type="submit">添加并扫描</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div id="sleep-modal" class="settings-modal" hidden>
+      <div id="sleep-backdrop" class="settings-backdrop"></div>
+      <section class="settings-panel sleep-panel" role="dialog" aria-modal="true" aria-labelledby="sleep-title">
+        <div class="section-head">
+          <h2 id="sleep-title">定时停止</h2>
+        </div>
+        <form id="sleep-form" class="sleep-form">
+          <label>
+            <span>计时分钟</span>
+            <input id="sleep-duration-input" type="number" min="1" max="1440" value="30" required />
+          </label>
+          <fieldset class="sleep-options">
+            <legend>计时结束后</legend>
+            <label>
+              <input type="radio" name="sleep-stop-mode" value="after-track" checked />
+              播放完整首后停止
+            </label>
+            <label>
+              <input type="radio" name="sleep-stop-mode" value="immediate" />
+              立刻停止
+            </label>
+          </fieldset>
+          <p id="sleep-status" class="path-hint">未设置定时停止。</p>
+          <div class="settings-actions">
+            <button id="cancel-sleep-button" class="secondary-button" type="button" hidden>取消定时</button>
+            <button id="close-sleep-button" class="secondary-button" type="button">关闭</button>
+            <button type="submit">开始计时</button>
           </div>
         </form>
       </section>
