@@ -97,6 +97,9 @@ def resolve_root_dir() -> Path | None:
 
 
 def classify_media(path: Path) -> str | None:
+    # macOS writes AppleDouble metadata files to non-APFS volumes.
+    if path.name.startswith("._"):
+        return None
     return MEDIA_EXTENSIONS.get(path.suffix.lower())
 
 

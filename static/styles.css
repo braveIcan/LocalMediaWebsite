@@ -191,9 +191,12 @@ input {
 }
 
 .category-toggle,
-.category-play,
 .file-node,
 .playlist-item,
+.file-add,
+.file-play,
+.playlist-name,
+.playlist-remove,
 .ghost-button,
 .control-button,
 .mode-chip {
@@ -203,14 +206,13 @@ input {
 }
 
 .category-toggle,
-.file-node,
-.playlist-item {
+.file-play,
+.playlist-name {
   width: 100%;
   text-align: left;
 }
 
 .category-toggle,
-.category-play,
 .ghost-button,
 .control-button,
 .mode-chip {
@@ -222,7 +224,6 @@ input {
   font-weight: 700;
 }
 
-.category-play,
 .ghost-button {
   color: var(--brand-deep);
   background: var(--brand-soft);
@@ -241,21 +242,39 @@ input {
 
 .file-node {
   display: grid;
-  grid-template-columns: 50px minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   gap: 12px;
   align-items: center;
   border-radius: 16px;
   padding: 12px 14px;
 }
 
-.file-kind {
+.file-add,
+.playlist-remove {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  flex: 0 0 auto;
+  padding: 0;
+  border-radius: 50%;
   color: var(--brand);
-  font-size: 0.78rem;
+  font-size: 1.2rem;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  line-height: 1;
 }
 
-.file-name {
+.file-play,
+.playlist-name {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.file-play,
+.playlist-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -361,7 +380,7 @@ input {
 
 .playlist-item {
   display: grid;
-  grid-template-columns: 56px minmax(0, 1fr) 70px;
+  grid-template-columns: 56px minmax(0, 1fr) 32px;
   gap: 14px;
   align-items: center;
   padding: 14px 16px;
@@ -373,18 +392,17 @@ input {
   border-color: rgba(211, 58, 49, 0.14);
 }
 
-.playlist-index,
-.playlist-kind {
+.playlist-item.is-active .playlist-name {
+  color: var(--brand-deep);
+  font-weight: 800;
+}
+
+.playlist-index {
   color: var(--muted);
   font-size: 0.84rem;
   font-weight: 700;
 }
 
-.playlist-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .settings-modal[hidden] {
   display: none;

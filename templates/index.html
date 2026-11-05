@@ -66,25 +66,24 @@
       <section class="category-block">
         <div class="category-head">
           <button class="category-toggle" type="button"></button>
-          <button class="category-play" type="button">播放本类</button>
         </div>
         <div class="category-files"></div>
       </section>
     </template>
 
     <template id="file-template">
-      <button class="file-node" type="button">
-        <span class="file-kind"></span>
-        <span class="file-name"></span>
-      </button>
+      <div class="file-node">
+        <button class="file-add" type="button" aria-label="加入播放列表" title="加入播放列表">+</button>
+        <button class="file-play" type="button"></button>
+      </div>
     </template>
 
     <template id="playlist-item-template">
-      <button class="playlist-item" type="button">
+      <div class="playlist-item">
         <span class="playlist-index"></span>
-        <span class="playlist-name"></span>
-        <span class="playlist-kind"></span>
-      </button>
+        <button class="playlist-name" type="button"></button>
+        <button class="playlist-remove" type="button" aria-label="从播放列表移除" title="从播放列表移除">−</button>
+      </div>
     </template>
 
     <div id="settings-modal" class="settings-modal" hidden>

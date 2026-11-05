@@ -92,24 +92,22 @@ function renderTree() {
     const node = categoryTemplate.content.cloneNode(true);
     const block = node.querySelector(".category-block");
     const toggle = node.querySelector(".category-toggle");
-    const playButton = node.querySelector(".category-play");
     const filesContainer = node.querySelector(".category-files");
 
     toggle.textContent = `${category.name} · ${category.items.length}`;
     toggle.addEventListener("click", () => {
       block.classList.toggle("is-open");
     });
-    playButton.addEventListener("click", () => {
-      setMode("sequence");
-      activatePlaylist(category.items, `${category.name} 播放列表`, 0, true);
-    });
 
     category.items.forEach((item) => {
       const fileNode = fileTemplate.content.cloneNode(true);
-      const button = fileNode.querySelector(".file-node");
-      fileNode.querySelector(".file-kind").textContent = item.kind === "audio" ? "音频" : "视频";
-      fileNode.querySelector(".file-name").textContent = item.title;
-      button.addEventListener("click", () => {
+      const addButton = fileNode.querySelector(".file-add");
+      const playButton = fileNode.querySelector(".file-play");
+      playButton.textContent = item.title;
+      addButton.addEventListener("click", () => {
+        addToPlaylist(item);
+      });
+      playButton.addEventListener("click", () => {
         const startIndex = category.items.findIndex((current) => current.id === item.id);
         setMode("single");
         activatePlaylist(category.items, `${category.name} 播放列表`, startIndex, true);
@@ -141,13 +139,17 @@ function renderPlaylist() {
 
   state.playlist.forEach((item, index) => {
     const node = playlistItemTemplate.content.cloneNode(true);
-    const button = node.querySelector(".playlist-item");
+    const playlistItem = node.querySelector(".playlist-item");
+    const playButton = node.querySelector(".playlist-name");
+    const removeButton = node.querySelector(".playlist-remove");
     node.querySelector(".playlist-index").textContent = String(index + 1).padStart(2, "0");
-    node.querySelector(".playlist-name").textContent = item.title;
-    node.querySelector(".playlist-kind").textContent = item.kind === "audio" ? "AUDIO" : "VIDEO";
-    button.classList.toggle("is-active", index === state.currentIndex);
-    button.addEventListener("click", () => {
+    playButton.textContent = item.title;
+    playlistItem.classList.toggle("is-active", index === state.currentIndex);
+    playButton.addEventListener("click", () => {
       playCurrentIndex(index, true);
+    });
+    removeButton.addEventListener("click", () => {
+      removeFromPlaylist(index);
     });
     fragment.append(node);
   });
@@ -186,6 +188,37 @@ function activatePlaylist(items, title, startIndex = 0, autoplay = false) {
     return;
   }
   playCurrentIndex(startIndex, autoplay);
+}
+
+function addToPlaylist(item) {
+  if (state.playlist.some((current) => current.id === item.id)) {
+    return;
+  }
+  state.playlist.push(item);
+  renderPlaylist();
+}
+
+function removeFromPlaylist(index) {
+  if (index < 0 || index >= state.playlist.length) {
+    return;
+  }
+
+  const removingCurrent = index === state.currentIndex;
+  state.playlist.splice(index, 1);
+
+  if (state.playlist.length === 0) {
+    state.currentIndex = -1;
+    showIdlePlayer();
+  } else if (removingCurrent) {
+    state.currentIndex = -1;
+    showIdlePlayer();
+  } else if (index < state.currentIndex) {
+    state.currentIndex -= 1;
+  }
+
+  renderPlaylist();
+  updateNowPlaying();
+  syncPlayToggleLabel();
 }
 
 function playCurrentIndex(index, autoplay = true) {
